@@ -895,7 +895,7 @@
 
           const missing = [];
           if (!data.capabilities?.checkpoints || data.capabilities.checkpoints.length === 0) {
-            missing.push('SD1.5 base or inpainting checkpoint (e.g. v1-5-pruned-emaonly.safetensors)');
+            missing.push('SD1.5 base or inpainting checkpoint (e.g. v1-5-pruned-emaonly-fp16_2.safetensors)');
           }
 
           return {
@@ -950,7 +950,7 @@
 
     // Comfy Workflow Builder (Section 12)
     const ComfyWorkflowBuilder = {
-      buildMultiStageWorkflow(plan, imageFilenames, instruction) {
+      buildMultiStageWorkflow(plan, imageFilenames, instruction, checkpointName = 'v1-5-pruned-emaonly-fp16_2.safetensors') {
         const isTwoChar = plan?.subjects && plan.subjects.length >= 2;
         const wearsTiara = plan?.subjects?.some(s => s.wearTiara);
         const headDown = plan?.subjects?.some(s => s.headPose?.direction === 'down');
@@ -969,7 +969,7 @@
         const workflow = {
           '1': {
             class_type: 'CheckpointLoaderSimple',
-            inputs: { ckpt_name: 'v1-5-pruned-emaonly.safetensors' }
+            inputs: { ckpt_name: checkpointName }
           },
           '2': {
             class_type: 'LoadImage',
@@ -1095,6 +1095,8 @@
         // Step 4: Generating...
         onProgress?.('Generating...', 'Submitting prompt to ComfyUI and monitoring execution...');
 
+        const recommendedCheckpoint = status.capabilities?.recommendedCheckpoint || 'v1-5-pruned-emaonly-fp16_2.safetensors';
+
         const executeRes = await fetch('/api/comfy/execute', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1105,7 +1107,8 @@
               mimeType: img.mimeType
             })),
             plan,
-            instruction
+            instruction,
+            checkpointName: recommendedCheckpoint
           })
         });
 
@@ -1127,6 +1130,9 @@
         await sleep(300);
 
         // Developer Debug Information (Section 18)
+        if (resultData.selectedCheckpoint) {
+          console.log('🎯 ComfyUI Active Checkpoint:', resultData.selectedCheckpoint);
+        }
         if (resultData.workflow) {
           window.__LAST_COMFY_WORKFLOW__ = resultData.workflow;
           console.log('🎨 COMFYUI WORKFLOW:', resultData.workflow);

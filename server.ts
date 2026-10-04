@@ -40,6 +40,109 @@ async function startServer() {
 
   const COMFY_URL = (process.env.LOCAL_COMFYUI_URL || 'http://127.0.0.1:8188').replace(/\/$/, '');
 
+  // Helper: Select optimal checkpoint from available CheckpointLoaderSimple models
+  function selectOptimalCheckpoint(availableCheckpoints: string[]): string | null {
+    if (!availableCheckpoints || availableCheckpoints.length === 0) {
+      return null;
+    }
+
+    // Priority 1: User's exact fp16_2 model (exact match or endsWith or contains fp16_2)
+    const exactFp16 = availableCheckpoints.find(
+      (c) =>
+        c.toLowerCase() === 'v1-5-pruned-emaonly-fp16_2.safetensors' ||
+        c.toLowerCase().endsWith('v1-5-pruned-emaonly-fp16_2.safetensors') ||
+        (c.toLowerCase().includes('v1-5') && c.toLowerCase().includes('fp16_2'))
+    );
+    if (exactFp16) return exactFp16;
+
+    // Priority 2: Any v1-5-pruned-emaonly variant (fp16, ema, etc.)
+    const emaVariant = availableCheckpoints.find(
+      (c) =>
+        (c.toLowerCase().includes('v1-5') || c.toLowerCase().includes('v1.5')) &&
+        c.toLowerCase().includes('pruned')
+    );
+    if (emaVariant) return emaVariant;
+
+    // Priority 3: SD1.5 inpainting checkpoint (specialized for inpainting/outpainting)
+    const inpaintModel = availableCheckpoints.find(
+      (c) =>
+        (c.toLowerCase().includes('inpaint') || c.toLowerCase().includes('inpainting')) &&
+        (c.toLowerCase().includes('1-5') || c.toLowerCase().includes('1.5') || c.toLowerCase().includes('sd15'))
+    );
+    if (inpaintModel) return inpaintModel;
+
+    // Priority 4: Any SD1.5 base checkpoint (v1-5, sd15, etc.)
+    const sd15 = availableCheckpoints.find(
+      (c) =>
+        c.toLowerCase().includes('1-5') ||
+        c.toLowerCase().includes('1.5') ||
+        c.toLowerCase().includes('sd15') ||
+        c.toLowerCase().includes('sd_v15')
+    );
+    if (sd15) return sd15;
+
+    // Priority 5: Any non-XL safetensors suitable for low-VRAM 4GB
+    const nonXl = availableCheckpoints.find(
+      (c) =>
+        !c.toLowerCase().includes('xl') &&
+        !c.toLowerCase().includes('flux') &&
+        !c.toLowerCase().includes('cascade')
+    );
+    if (nonXl) return nonXl;
+
+    // Priority 6: First available checkpoint
+    return availableCheckpoints[0];
+  }
+
+  // Helper: Dynamically fetch valid checkpoints from ComfyUI /object_info
+  async function fetchAvailableCheckpoints(comfyUrl: string): Promise<string[]> {
+    try {
+      let data: any = null;
+
+      // 1. Try querying /object_info/CheckpointLoaderSimple first
+      try {
+        const c1 = new AbortController();
+        const t1 = setTimeout(() => c1.abort(), 3500);
+        const res1 = await fetch(`${comfyUrl}/object_info/CheckpointLoaderSimple`, { signal: c1.signal });
+        clearTimeout(t1);
+        if (res1.ok) {
+          data = await res1.json().catch(() => null);
+        }
+      } catch {
+        // Fall back to full object_info
+      }
+
+      // 2. Fallback to full /object_info if node-specific endpoint did not return valid structure
+      if (!data || (!data.CheckpointLoaderSimple && !data.input)) {
+        try {
+          const c2 = new AbortController();
+          const t2 = setTimeout(() => c2.abort(), 6000);
+          const res2 = await fetch(`${comfyUrl}/object_info`, { signal: c2.signal });
+          clearTimeout(t2);
+          if (res2.ok) {
+            data = await res2.json().catch(() => null);
+          }
+        } catch {
+          // Could not reach object_info
+        }
+      }
+
+      if (!data) return [];
+
+      const nodeInfo = data.CheckpointLoaderSimple || data;
+      let rawList: any[] = [];
+      if (Array.isArray(nodeInfo?.input?.required?.ckpt_name?.[0])) {
+        rawList = nodeInfo.input.required.ckpt_name[0];
+      } else if (Array.isArray(nodeInfo?.input?.required?.ckpt_name)) {
+        rawList = nodeInfo.input.required.ckpt_name;
+      }
+
+      return rawList.filter((x): x is string => typeof x === 'string');
+    } catch {
+      return [];
+    }
+  }
+
   // Comprehensive Local Health Check Endpoint (Requirement 9)
   app.get('/api/health', async (_req, res) => {
     let comfyHealth: any = { reachable: false, baseUrl: COMFY_URL, exactError: 'Pending' };
@@ -71,8 +174,10 @@ async function startServer() {
         const vramTotalMb = device.vram_total ? Math.round(device.vram_total / (1024 * 1024)) : 4096;
         const isLowVram = vramTotalMb <= 6144;
 
+        const optimalCheckpoint = selectOptimalCheckpoint(checkpoints);
+
         const missing: string[] = [];
-        if (checkpoints.length === 0) missing.push('Base model (e.g. v1-5-pruned-emaonly.safetensors in models/checkpoints/)');
+        if (checkpoints.length === 0) missing.push('Base model (e.g. v1-5-pruned-emaonly-fp16_2.safetensors in models/checkpoints/)');
         if (!objectInfo.IPAdapterApply) missing.push('ComfyUI_IPAdapter_plus custom node');
         if (!objectInfo.ControlNetApply) missing.push('ControlNet nodes');
 
@@ -83,6 +188,8 @@ async function startServer() {
           vramTotalMb,
           isLowVram,
           checkpoints,
+          recommendedCheckpoint: optimalCheckpoint,
+          selectedCheckpoint: optimalCheckpoint,
           controlNetModels,
           ipAdapterModels,
           missingRequirements: missing,
@@ -527,7 +634,7 @@ Produce strict JSON matching the schema.`;
       const missingRequirements: string[] = [];
 
       if (checkpoints.length === 0) {
-        missingRequirements.push('Base Checkpoint: No checkpoint found in models/checkpoints/ (recommended: v1-5-pruned-emaonly.safetensors or sd-v1-5-inpainting.safetensors)');
+        missingRequirements.push('Base Checkpoint: No checkpoint found in models/checkpoints/ (recommended: v1-5-pruned-emaonly-fp16_2.safetensors or sd-v1-5-inpainting.safetensors)');
       }
 
       if (!hasIPAdapterNodes) {
@@ -585,7 +692,7 @@ Produce strict JSON matching the schema.`;
           hasIPAdapterNodes,
           hasControlNetNodes,
           hasInpaintingNodes,
-          recommendedCheckpoint: checkpoints.find((c: string) => c.includes('inpaint') || c.includes('v1-5')) || checkpoints[0] || null,
+          recommendedCheckpoint: selectOptimalCheckpoint(checkpoints),
         },
         missingRequirements,
         workflowSupport: {
@@ -650,6 +757,26 @@ Produce strict JSON matching the schema.`;
       if (!prompt) {
         res.status(400).json({ error: 'prompt workflow is required.' });
         return;
+      }
+
+      // Check and auto-correct any CheckpointLoaderSimple nodes if checkpoint is missing or outdated
+      try {
+        const availableCheckpoints = await fetchAvailableCheckpoints(COMFY_URL);
+        const optimalCheckpoint = selectOptimalCheckpoint(availableCheckpoints);
+        if (optimalCheckpoint && prompt && typeof prompt === 'object') {
+          for (const nodeId of Object.keys(prompt)) {
+            const node = prompt[nodeId];
+            if (node?.class_type === 'CheckpointLoaderSimple' && node.inputs) {
+              const currentCkpt = node.inputs.ckpt_name;
+              if (!availableCheckpoints.includes(currentCkpt)) {
+                console.log(`Auto-correcting CheckpointLoaderSimple node ${nodeId} from "${currentCkpt}" to detected "${optimalCheckpoint}"`);
+                node.inputs.ckpt_name = optimalCheckpoint;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not inspect checkpoints before prompt submission:', err);
       }
 
       const comfyRes = await fetch(`${COMFY_URL}/prompt`, {
@@ -754,8 +881,30 @@ Produce strict JSON matching the schema.`;
         uploadedFileNames.push(upData.name || filename);
       }
 
-      // Step B: Build appropriate ComfyUI Workflow JSON based on EditPlan
-      const workflow = buildServerComfyWorkflow(plan, uploadedFileNames, instruction);
+      // Step B: Dynamically detect and select valid checkpoint from ComfyUI /object_info
+      const availableCheckpoints = await fetchAvailableCheckpoints(COMFY_URL);
+      let selectedCheckpoint: string | null = null;
+
+      if (availableCheckpoints.length > 0) {
+        if (req.body.checkpointName && availableCheckpoints.includes(req.body.checkpointName)) {
+          selectedCheckpoint = req.body.checkpointName;
+        } else {
+          selectedCheckpoint = selectOptimalCheckpoint(availableCheckpoints);
+        }
+      }
+
+      if (!selectedCheckpoint) {
+        res.status(400).json({
+          success: false,
+          error: `No compatible SD1.5 checkpoint found in ComfyUI. Checked CheckpointLoaderSimple in /object_info: available models = [${availableCheckpoints.join(', ')}]. Please ensure 'v1-5-pruned-emaonly-fp16_2.safetensors' or another SD1.5 checkpoint is in your ComfyUI models/checkpoints directory.`,
+        });
+        return;
+      }
+
+      console.log(`🎯 Dynamically Selected ComfyUI Checkpoint: "${selectedCheckpoint}" (available in ComfyUI: ${JSON.stringify(availableCheckpoints)})`);
+
+      // Build appropriate ComfyUI Workflow JSON based on EditPlan with the dynamic checkpoint
+      const workflow = buildServerComfyWorkflow(plan, uploadedFileNames, instruction, selectedCheckpoint);
 
       // Step C: Dispatch to ComfyUI /prompt
       const promptRes = await fetch(`${COMFY_URL}/prompt`, {
@@ -766,6 +915,7 @@ Produce strict JSON matching the schema.`;
 
       if (!promptRes.ok) {
         const errText = await promptRes.text();
+        console.error('❌ ComfyUI rejected prompt:', errText);
         throw new Error(`ComfyUI rejected prompt: ${errText}`);
       }
 
@@ -815,6 +965,7 @@ Produce strict JSON matching the schema.`;
         promptId,
         workflow,
         plan,
+        selectedCheckpoint,
       });
     } catch (err: any) {
       res.status(500).json({
@@ -1143,7 +1294,12 @@ function generateHeuristicPlan(images: any[], instruction: string) {
   };
 }
 
-function buildServerComfyWorkflow(plan: any, uploadedFileNames: string[], instruction: string) {
+function buildServerComfyWorkflow(
+  plan: any,
+  uploadedFileNames: string[],
+  instruction: string,
+  checkpointName: string = 'v1-5-pruned-emaonly-fp16_2.safetensors'
+) {
   const isTwoChar = plan?.subjects && plan.subjects.length >= 2;
   const isOutpaint = plan?.operations?.some((o: any) => o.type === 'outpaint');
   const wearsTiara = plan?.subjects?.some((s: any) => s.wearTiara);
@@ -1167,7 +1323,7 @@ function buildServerComfyWorkflow(plan: any, uploadedFileNames: string[], instru
     '1': {
       class_type: 'CheckpointLoaderSimple',
       inputs: {
-        ckpt_name: 'v1-5-pruned-emaonly.safetensors',
+        ckpt_name: checkpointName,
       },
     },
     '2': {
