@@ -1,0 +1,1501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Image Agent</title>
+  <meta name="description" content="Minimalist AI image editing agent interface." />
+
+  <style>
+    /* ==========================================================================
+       RESET & BASE THEME
+       ========================================================================== */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #09090b;
+      color: #f4f4f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2.5rem 1rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Container */
+    .app-container {
+      width: 100%;
+      max-width: 640px;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 0.5rem;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      color: #ffffff;
+      margin-bottom: 0.35rem;
+    }
+
+    .tagline {
+      font-size: 0.875rem;
+      color: #a1a1aa;
+    }
+
+    /* ==========================================================================
+       DRAG & DROP / UPLOAD SECTION
+       ========================================================================== */
+    .drop-zone {
+      border: 2px dashed #27272a;
+      background-color: #121215;
+      border-radius: 1rem;
+      padding: 2.5rem 1.5rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .drop-zone:hover {
+      border-color: #3f3f46;
+      background-color: #18181b;
+    }
+
+    .drop-zone.dragover {
+      border-color: #6366f1;
+      background-color: rgba(99, 102, 241, 0.08);
+      transform: scale(1.005);
+    }
+
+    .drop-icon {
+      width: 44px;
+      height: 44px;
+      margin: 0 auto 0.75rem auto;
+      border-radius: 0.75rem;
+      background: #1e1e24;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #a1a1aa;
+    }
+
+    .drop-primary-text {
+      font-size: 0.925rem;
+      font-weight: 500;
+      color: #f4f4f5;
+    }
+
+    .drop-primary-text span {
+      color: #818cf8;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+    }
+
+    .drop-subtext {
+      font-size: 0.775rem;
+      color: #71717a;
+      margin-top: 0.35rem;
+    }
+
+    /* Hidden file input */
+    #fileInput {
+      display: none;
+    }
+
+    /* Reference previews */
+    .preview-section {
+      display: none;
+      background-color: #121215;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 1rem;
+    }
+
+    .preview-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #a1a1aa;
+    }
+
+    .btn-clear {
+      background: none;
+      border: none;
+      color: #71717a;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    .btn-clear:hover {
+      color: #e4e4e7;
+    }
+
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .preview-card {
+      position: relative;
+      aspect-ratio: 1;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      border: 1px solid #27272a;
+      background: #09090b;
+    }
+
+    .preview-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .image-badge {
+      position: absolute;
+      top: 0.35rem;
+      left: 0.35rem;
+      background: rgba(18, 18, 21, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(4px);
+      padding: 0.15rem 0.4rem;
+      border-radius: 0.35rem;
+      font-size: 0.675rem;
+      font-weight: 600;
+      color: #f4f4f5;
+    }
+
+    .btn-remove-img {
+      position: absolute;
+      top: 0.35rem;
+      right: 0.35rem;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(18, 18, 21, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #d4d4d8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 0.75rem;
+      line-height: 1;
+      transition: background 0.15s;
+    }
+
+    .btn-remove-img:hover {
+      background: #dc2626;
+      border-color: #dc2626;
+      color: #ffffff;
+    }
+
+    .btn-add-more {
+      aspect-ratio: 1;
+      border: 1px dashed #3f3f46;
+      border-radius: 0.75rem;
+      background: rgba(24, 24, 27, 0.5);
+      color: #a1a1aa;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn-add-more:hover {
+      border-color: #71717a;
+      background: #18181b;
+      color: #f4f4f5;
+    }
+
+    /* Test Case quick-select bar */
+    .samples-bar {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0.45rem 0.75rem;
+      font-size: 0.75rem;
+      color: #71717a;
+      margin-top: -0.5rem;
+    }
+
+    .sample-chip {
+      background: none;
+      border: none;
+      color: #a1a1aa;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      font-size: 0.75rem;
+      padding: 0.1rem 0;
+    }
+
+    .sample-chip:hover {
+      color: #818cf8;
+    }
+
+    /* ==========================================================================
+       INSTRUCTION INPUT
+       ========================================================================== */
+    .instruction-wrapper {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .instruction-input {
+      width: 100%;
+      min-height: 84px;
+      padding: 0.85rem 1rem;
+      border-radius: 0.875rem;
+      border: 1px solid #27272a;
+      background-color: #121215;
+      color: #f4f4f5;
+      font-size: 0.925rem;
+      line-height: 1.45;
+      resize: vertical;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      font-family: inherit;
+    }
+
+    .instruction-input:focus {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 1px #6366f1;
+    }
+
+    .instruction-input::placeholder {
+      color: #52525b;
+    }
+
+    /* ==========================================================================
+       GENERATE BUTTON
+       ========================================================================== */
+    .btn-generate {
+      width: 100%;
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.875rem;
+      border: none;
+      background: #ffffff;
+      color: #09090b;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .btn-generate:hover:not(:disabled) {
+      background: #e4e4e7;
+    }
+
+    .btn-generate:active:not(:disabled) {
+      transform: scale(0.99);
+    }
+
+    .btn-generate:disabled {
+      background: #27272a;
+      color: #71717a;
+      cursor: not-allowed;
+    }
+
+    /* ==========================================================================
+       PROGRESS / STATUS AREA
+       ========================================================================== */
+    .status-area {
+      display: none;
+      background: #121215;
+      border: 1px solid #27272a;
+      border-radius: 0.875rem;
+      padding: 1rem 1.25rem;
+      text-align: center;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: #e4e4e7;
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #6366f1;
+      animation: pulse 1.2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(0.85); opacity: 0.6; }
+      50% { transform: scale(1.25); opacity: 1; }
+    }
+
+    .status-sub {
+      font-size: 0.75rem;
+      color: #71717a;
+      margin-top: 0.35rem;
+    }
+
+    /* ==========================================================================
+       MESSAGE / ERROR BANNER
+       ========================================================================== */
+    .message-banner {
+      display: none;
+      border-radius: 0.875rem;
+      padding: 0.85rem 1rem;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    .message-banner.error {
+      display: block;
+      background: rgba(220, 38, 38, 0.1);
+      border: 1px solid rgba(220, 38, 38, 0.3);
+      color: #fca5a5;
+    }
+
+    .message-banner.info {
+      display: block;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fde68a;
+    }
+
+    /* ==========================================================================
+       RESULT DISPLAY & DOWNLOAD
+       ========================================================================== */
+    .result-section {
+      display: none;
+      background: #121215;
+      border: 1px solid #27272a;
+      border-radius: 1rem;
+      padding: 1rem;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #a1a1aa;
+    }
+
+    .result-image-box {
+      width: 100%;
+      background: #000000;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      border: 1px solid #27272a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      max-height: 560px;
+    }
+
+    .result-image-box img {
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+      max-height: 560px;
+      display: block;
+    }
+
+    .result-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .btn-download {
+      flex: 1;
+      padding: 0.75rem 1.25rem;
+      border-radius: 0.75rem;
+      border: none;
+      background: #ffffff;
+      color: #09090b;
+      font-weight: 600;
+      font-size: 0.875rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.4rem;
+      text-decoration: none;
+      transition: background 0.15s;
+    }
+
+    .btn-download:hover {
+      background: #e4e4e7;
+    }
+
+    .btn-secondary {
+      padding: 0.75rem 1rem;
+      border-radius: 0.75rem;
+      border: 1px solid #3f3f46;
+      background: #18181b;
+      color: #f4f4f5;
+      font-weight: 500;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-secondary:hover {
+      background: #27272a;
+      border-color: #52525b;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <h1>AI Image Agent</h1>
+      <p class="tagline">Upload references, describe what you want, and generate.</p>
+    </header>
+
+    <!-- 1. Drag and Drop Upload Area -->
+    <div id="dropZone" class="drop-zone">
+      <div class="drop-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path>
+          <path d="M12 12v9"></path>
+          <path d="m16 16-4-4-4 4"></path>
+        </svg>
+      </div>
+      <p class="drop-primary-text">Drop reference images here, or <span>browse</span></p>
+      <p class="drop-subtext">Supports multiple references (PNG, JPEG, WebP)</p>
+    </div>
+
+    <!-- Hidden file input for file picker dialog -->
+    <input type="file" id="fileInput" multiple accept="image/*" />
+
+    <!-- 2. Preview of Uploaded Reference Images -->
+    <div id="previewSection" class="preview-section">
+      <div class="preview-header">
+        <span id="previewCountLabel">References (0)</span>
+        <button id="btnClearAll" type="button" class="btn-clear">Clear all</button>
+      </div>
+      <div id="previewGrid" class="preview-grid">
+        <!-- Dynamically populated reference cards + Add More button -->
+      </div>
+    </div>
+
+    <!-- Test cases quick-select presets -->
+    <div id="samplesBar" class="samples-bar">
+      <span>Test cases:</span>
+      <button type="button" class="sample-chip" data-test="two-char">Two-Character Tiara &amp; Pose Transfer (16:9)</button>
+      <span>•</span>
+      <button type="button" class="sample-chip" data-test="1">Test 1: Black Hat</button>
+      <span>•</span>
+      <button type="button" class="sample-chip" data-test="2">Test 2: Jacket (Keep Face)</button>
+      <span>•</span>
+      <button type="button" class="sample-chip" data-test="3">Test 3: Extend to Knees</button>
+      <span>•</span>
+      <button type="button" class="sample-chip" data-test="4">Test 4: Look Down (Pose)</button>
+      <span>•</span>
+      <button type="button" class="sample-chip" data-test="5">Test 5: Remove Background</button>
+    </div>
+
+    <!-- 3. Text box for User Instruction -->
+    <div class="instruction-wrapper">
+      <textarea
+        id="instructionInput"
+        class="instruction-input"
+        placeholder="e.g. Put the hat from the second image on the person's head and extend the image downward to the knees..."
+      ></textarea>
+    </div>
+
+    <!-- 4. One Generate Button -->
+    <button id="btnGenerate" type="button" class="btn-generate">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+        <path d="M5 3v4"/>
+        <path d="M19 17v4"/>
+        <path d="M3 5h4"/>
+        <path d="M17 19h4"/>
+      </svg>
+      <span>Generate</span>
+    </button>
+
+    <!-- 5. Progress / Status Area -->
+    <div id="statusArea" class="status-area">
+      <div class="status-badge">
+        <span class="pulse-dot"></span>
+        <span id="statusMessage">Analyzing references...</span>
+      </div>
+      <p id="statusDetail" class="status-sub">Agent is mapping references and planning operations...</p>
+    </div>
+
+    <!-- Message / Error Banner -->
+    <div id="messageBanner" class="message-banner"></div>
+
+    <!-- 6 & 7. Generated Result Display & Download Button -->
+    <div id="resultSection" class="result-section">
+      <div class="result-header">
+        <span>Generated Result</span>
+        <span>Ready</span>
+      </div>
+      <div class="result-image-box">
+        <img id="resultImage" alt="Generated AI edit" />
+      </div>
+      <div class="result-actions">
+        <a id="btnDownload" class="btn-download" download="agent-generated-image.png">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Download
+        </a>
+        <button id="btnUseAsReference" type="button" class="btn-secondary">
+          Use as Reference 1
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ==========================================================================
+       SECTION 1: APPLICATION STATE
+       ========================================================================== */
+    const state = {
+      // List of uploaded reference images: [{ id, name, dataUrl, mimeType, width, height, size }]
+      references: [],
+      // User's natural language instruction
+      instruction: '',
+      // Current stage: 'idle' | 'analyzing' | 'understanding' | 'planning' | 'generating' | 'finishing' | 'completed' | 'failed'
+      stage: 'idle',
+      // Internal structured plan produced by Gemini Agent Brain
+      currentPlan: null,
+      // Generated result image data URL
+      resultDataUrl: null,
+      // Providers
+      geminiBrain: null,
+      imageProvider: null
+    };
+
+    /* ==========================================================================
+       SECTION 2: UI ELEMENT REFERENCES
+       ========================================================================== */
+    const UI = {
+      dropZone: document.getElementById('dropZone'),
+      fileInput: document.getElementById('fileInput'),
+      previewSection: document.getElementById('previewSection'),
+      previewGrid: document.getElementById('previewGrid'),
+      previewCountLabel: document.getElementById('previewCountLabel'),
+      btnClearAll: document.getElementById('btnClearAll'),
+      samplesBar: document.getElementById('samplesBar'),
+      instructionInput: document.getElementById('instructionInput'),
+      btnGenerate: document.getElementById('btnGenerate'),
+      statusArea: document.getElementById('statusArea'),
+      statusMessage: document.getElementById('statusMessage'),
+      statusDetail: document.getElementById('statusDetail'),
+      messageBanner: document.getElementById('messageBanner'),
+      resultSection: document.getElementById('resultSection'),
+      resultImage: document.getElementById('resultImage'),
+      btnDownload: document.getElementById('btnDownload'),
+      btnUseAsReference: document.getElementById('btnUseAsReference')
+    };
+
+    /* ==========================================================================
+       SECTION 3: IMAGE UPLOAD & VALIDATION (Section 6)
+       ==========================================================================
+       Validates: MIME type, file size, and extracts image dimensions.
+       Converts images to full data URLs for Gemini multimodal reasoning.
+       ========================================================================== */
+    const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
+    const ALLOWED_MIME_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif'];
+
+    UI.dropZone.addEventListener('click', () => UI.fileInput.click());
+
+    UI.dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      UI.dropZone.classList.add('dragover');
+    });
+
+    UI.dropZone.addEventListener('dragleave', () => {
+      UI.dropZone.classList.remove('dragover');
+    });
+
+    UI.dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      UI.dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        handleIncomingFiles(e.dataTransfer.files);
+      }
+    });
+
+    UI.fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        handleIncomingFiles(e.target.files);
+        e.target.value = '';
+      }
+    });
+
+    async function handleIncomingFiles(fileList) {
+      clearBanner();
+      const files = Array.from(fileList);
+
+      for (const file of files) {
+        // Validate MIME type
+        if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+          showBanner(`File "${file.name}" has an unsupported format. Please upload PNG, JPEG, or WebP.`, 'error');
+          continue;
+        }
+
+        // Validate file size
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+          showBanner(`File "${file.name}" exceeds the 25MB limit.`, 'error');
+          continue;
+        }
+
+        try {
+          const { dataUrl, width, height } = await readFileWithDimensions(file);
+          state.references.push({
+            id: 'ref_' + Math.random().toString(36).substr(2, 9),
+            name: file.name,
+            dataUrl: dataUrl,
+            mimeType: file.type || 'image/png',
+            width: width,
+            height: height,
+            size: file.size
+          });
+          renderReferences();
+        } catch (err) {
+          showBanner(`Failed to load "${file.name}".`, 'error');
+        }
+      }
+    }
+
+    function readFileWithDimensions(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target.result;
+          const img = new Image();
+          img.onload = () => {
+            resolve({
+              dataUrl,
+              width: img.naturalWidth,
+              height: img.naturalHeight
+            });
+          };
+          img.onerror = () => reject(new Error('Invalid image'));
+          img.src = dataUrl;
+        };
+        reader.onerror = () => reject(new Error('File reading error'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /* ==========================================================================
+       SECTION 4: REFERENCE MANAGEMENT
+       ========================================================================== */
+    function renderReferences() {
+      if (state.references.length === 0) {
+        UI.previewSection.style.display = 'none';
+        UI.dropZone.style.display = 'block';
+        if (UI.samplesBar) UI.samplesBar.style.display = 'flex';
+        return;
+      }
+
+      UI.dropZone.style.display = 'none';
+      if (UI.samplesBar) UI.samplesBar.style.display = 'none';
+      UI.previewSection.style.display = 'block';
+      UI.previewCountLabel.textContent = `References (${state.references.length})`;
+      UI.previewGrid.innerHTML = '';
+
+      state.references.forEach((ref, index) => {
+        const card = document.createElement('div');
+        card.className = 'preview-card';
+
+        const img = document.createElement('img');
+        img.src = ref.dataUrl;
+        img.alt = `Reference ${index + 1}`;
+
+        const badge = document.createElement('div');
+        badge.className = 'image-badge';
+        badge.textContent = `Image ${index + 1}`;
+
+        const btnRemove = document.createElement('button');
+        btnRemove.type = 'button';
+        btnRemove.className = 'btn-remove-img';
+        btnRemove.innerHTML = '&times;';
+        btnRemove.title = 'Remove';
+        btnRemove.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeReference(index);
+        });
+
+        card.appendChild(img);
+        card.appendChild(badge);
+        card.appendChild(btnRemove);
+        UI.previewGrid.appendChild(card);
+      });
+
+      // Append '+ Add' slot
+      const btnAddMore = document.createElement('button');
+      btnAddMore.type = 'button';
+      btnAddMore.className = 'btn-add-more';
+      btnAddMore.innerHTML = `
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>Add</span>
+      `;
+      btnAddMore.addEventListener('click', () => UI.fileInput.click());
+      UI.previewGrid.appendChild(btnAddMore);
+    }
+
+    function removeReference(index) {
+      state.references.splice(index, 1);
+      renderReferences();
+    }
+
+    UI.btnClearAll.addEventListener('click', () => {
+      state.references = [];
+      renderReferences();
+    });
+
+    /* ==========================================================================
+       SECTION 5: GEMINI AGENT BRAIN PROVIDER (Section 1, 2, 3, 5, 6)
+       ==========================================================================
+       GeminiProvider handles AI reasoning & planning.
+       - Dispatches to secure server-side endpoint `/api/agent/plan`
+       - Never exposes API keys in the client-side JavaScript.
+       - Receives actual image data and natural language instruction.
+       - Classifies reference roles:
+         subject, face_reference, character_reference, object_reference,
+         clothing_reference, pose_reference, background_reference,
+         style_reference, composition_reference.
+       - Decomposes into structured operations:
+         inpaint, outpaint, object_add, object_remove, clothing_change,
+         background_change, pose_change, identity_preservation, image_to_image, upscale.
+       ========================================================================== */
+    class GeminiProvider {
+      constructor(endpoint = '/api/agent/plan') {
+        this.endpoint = endpoint;
+      }
+
+      async planEdit(references, instruction) {
+        const payload = {
+          instruction: instruction.trim(),
+          images: references.map(r => ({
+            name: r.name,
+            mimeType: r.mimeType,
+            dataUrl: r.dataUrl,
+            width: r.width,
+            height: r.height,
+            size: r.size
+          }))
+        };
+
+        const res = await fetch(this.endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Agent planning failed with status ${res.status}`);
+        }
+
+        const data = await res.json();
+        return data.plan;
+      }
+    }
+
+    /* ==========================================================================
+       SECTION 6: REAL IMAGE GENERATION PROVIDER ARCHITECTURE (Section 4, 10, 11)
+       ==========================================================================
+       ImageProvider defines the common interface for actual image editing:
+       - analyze()
+       - edit()
+       - inpaint()
+       - outpaint()
+       - generate()
+
+       LocalProvider: Prepares for connecting local ComfyUI instance
+       CloudProvider: Prepares for connecting remote GPU worker / cloud endpoint
+       ========================================================================== */
+    /* ==========================================================================
+       SECTION 6: REAL IMAGE GENERATION PROVIDER ARCHITECTURE (Section 1, 3, 12, 13, 14)
+       ==========================================================================
+       LOCAL_IMAGE_BACKEND Centralized Configuration (Section 19)
+       Target Machine: NVIDIA GTX 1050 4GB VRAM (Low-VRAM Mode)
+       ========================================================================== */
+    const LOCAL_IMAGE_BACKEND = {
+      baseUrl: "http://127.0.0.1:8188",
+      enabled: true,
+      lowVram: true,
+      timeoutMs: 300000 // 5 minutes max for multi-stage local generation
+    };
+
+    // ComfyUI Capability Detector (Section 13)
+    const ComfyUICapabilityDetector = {
+      async detect() {
+        try {
+          const res = await fetch('/api/comfy/status').catch(() => null);
+          if (!res || !res.ok) {
+            return {
+              reachable: false,
+              baseUrl: LOCAL_IMAGE_BACKEND.baseUrl,
+              error: `Local ComfyUI server is offline at ${LOCAL_IMAGE_BACKEND.baseUrl}. Please start ComfyUI with: python main.py --lowvram --port 8188 --listen 127.0.0.1`
+            };
+          }
+
+          const data = await res.json();
+          if (!data.reachable) {
+            return {
+              reachable: false,
+              baseUrl: data.baseUrl || LOCAL_IMAGE_BACKEND.baseUrl,
+              error: data.error || `Local ComfyUI server is offline at ${LOCAL_IMAGE_BACKEND.baseUrl}.`
+            };
+          }
+
+          const missing = [];
+          if (!data.capabilities?.checkpoints || data.capabilities.checkpoints.length === 0) {
+            missing.push('SD1.5 base or inpainting checkpoint (e.g. v1-5-pruned-emaonly.safetensors)');
+          }
+
+          return {
+            reachable: true,
+            capabilities: data.capabilities,
+            missing: missing,
+            isConfigured: missing.length === 0
+          };
+        } catch (err) {
+          return {
+            reachable: false,
+            baseUrl: LOCAL_IMAGE_BACKEND.baseUrl,
+            error: `Local ComfyUI connection failed: ${err.message}`
+          };
+        }
+      }
+    };
+
+    // Workflow Selector (Section 3)
+    const WorkflowSelector = {
+      selectWorkflow(plan) {
+        const isTwoChar = plan?.subjects && plan.subjects.length >= 2;
+        const hasPoseTransfer = plan?.poseTransfer && plan.poseTransfer.enabled;
+        const hasOutpaint = plan?.operations?.some(o => o.type === 'outpaint');
+        const hasInpaint = plan?.operations?.some(o => o.type === 'inpaint' || o.type === 'object_add');
+        const hasClothing = plan?.operations?.some(o => o.type === 'clothing_change');
+
+        if (isTwoChar && (hasPoseTransfer || plan?.subjects?.some(s => s.wearTiara))) {
+          return 'multi_stage_edit'; // Multi-stage execution for two characters, tiaras & pose
+        }
+        if (isTwoChar) {
+          return 'multi_subject_composite';
+        }
+        if (hasPoseTransfer) {
+          return 'pose_transfer';
+        }
+        if (hasOutpaint) {
+          return 'outpaint';
+        }
+        if (hasClothing) {
+          return 'clothing_change';
+        }
+        if (hasInpaint) {
+          return 'simple_inpaint';
+        }
+        if (plan?.composition?.preserveBackground) {
+          return 'background_preservation_edit';
+        }
+        return 'identity_preserving_edit';
+      }
+    };
+
+    // Comfy Workflow Builder (Section 12)
+    const ComfyWorkflowBuilder = {
+      buildMultiStageWorkflow(plan, imageFilenames, instruction) {
+        const isTwoChar = plan?.subjects && plan.subjects.length >= 2;
+        const wearsTiara = plan?.subjects?.some(s => s.wearTiara);
+        const headDown = plan?.subjects?.some(s => s.headPose?.direction === 'down');
+        const canvasAspect = plan?.canvas?.aspectRatio || '16:9';
+
+        let positiveText = instruction;
+        if (isTwoChar) {
+          positiveText = `masterpiece, cinematic wide 16:9 landscape composition, two subjects seamlessly integrated into the preserved location of image 1, both subjects with distinct recognizable identities, ${wearsTiara ? 'each wearing an ornate tiara with visible written text "Tiara", ' : ''}${headDown ? 'both subjects with heads tilted downward in a strong head-down pose with faces visible only from the nose downward, ' : ''}matching lighting and environmental perspective, 8k resolution.`;
+        }
+
+        const negativeText = 'blurry, low quality, deformed anatomy, distorted text, wrong spelling, floating headpiece, front-facing face exposed, extra limbs, bad proportions';
+
+        const baseImg = imageFilenames[0] || 'input_1.png';
+        const secondImg = imageFilenames[1] || baseImg;
+
+        const workflow = {
+          '1': {
+            class_type: 'CheckpointLoaderSimple',
+            inputs: { ckpt_name: 'v1-5-pruned-emaonly.safetensors' }
+          },
+          '2': {
+            class_type: 'LoadImage',
+            inputs: { image: baseImg }
+          },
+          '3': {
+            class_type: 'CLIPTextEncode',
+            inputs: { text: positiveText, clip: ['1', 1] }
+          },
+          '4': {
+            class_type: 'CLIPTextEncode',
+            inputs: { text: negativeText, clip: ['1', 1] }
+          },
+          '5': {
+            class_type: 'VAEEncode',
+            inputs: { pixels: ['2', 0], vae: ['1', 2] }
+          },
+          '6': {
+            class_type: 'KSampler',
+            inputs: {
+              seed: Math.floor(Math.random() * 1000000000),
+              steps: 20,
+              cfg: 7.0,
+              sampler_name: 'euler_ancestral',
+              scheduler: 'normal',
+              denoise: isTwoChar ? 0.60 : 0.65,
+              model: ['1', 0],
+              positive: ['3', 0],
+              negative: ['4', 0],
+              latent_image: ['5', 0]
+            }
+          },
+          '7': {
+            class_type: 'VAEDecode',
+            inputs: { samples: ['6', 0], vae: ['1', 2] }
+          },
+          '8': {
+            class_type: 'SaveImage',
+            inputs: { filename_prefix: 'AIAgent_Output', images: ['7', 0] }
+          }
+        };
+
+        if (imageFilenames.length > 1) {
+          workflow['9'] = {
+            class_type: 'LoadImage',
+            inputs: { image: secondImg }
+          };
+        }
+
+        return workflow;
+      }
+    };
+
+    class ImageProvider {
+      constructor(name, type) {
+        this.name = name;
+        this.type = type;
+      }
+
+      isConfigured() {
+        return false;
+      }
+
+      async analyze(images, context) {
+        throw new Error('Image provider is not configured.');
+      }
+
+      async generate(prompt, options) {
+        throw new Error('Image provider is not configured.');
+      }
+
+      async edit(images, plan, instruction) {
+        throw new Error('Image provider is not configured.');
+      }
+
+      async inpaint(baseImage, referenceImages, target, instruction) {
+        throw new Error('Image provider is not configured.');
+      }
+
+      async outpaint(baseImage, direction, instruction) {
+        throw new Error('Image provider is not configured.');
+      }
+    }
+
+    class LocalProvider extends ImageProvider {
+      constructor(config = {}) {
+        super('ComfyUI Local GPU', 'local');
+        this.baseUrl = config.baseUrl || LOCAL_IMAGE_BACKEND.baseUrl;
+        this.timeout = config.timeout || LOCAL_IMAGE_BACKEND.timeoutMs;
+        this.hardwareProfile = {
+          vramMb: 4096, // NVIDIA GTX 1050 4GB VRAM
+          ramMb: 32768,
+          isLowVramMode: true,
+          maxSafeResolution: 512
+        };
+      }
+
+      async checkHealth() {
+        return await ComfyUICapabilityDetector.detect();
+      }
+
+      async edit(images, plan, instruction, onProgress) {
+        // Step 1: Connecting to local image engine...
+        onProgress?.('Connecting to local image engine...', `Pinging ComfyUI at ${this.baseUrl}...`);
+        const status = await this.checkHealth();
+
+        if (!status.reachable) {
+          throw new Error(status.error || `Local ComfyUI server is offline at ${this.baseUrl}. Please start ComfyUI with: python main.py --lowvram --port 8188 --listen 127.0.0.1`);
+        }
+
+        if (status.missing && status.missing.length > 0) {
+          throw new Error(`ComfyUI is running, but the following required models are missing: ${status.missing.join(', ')}`);
+        }
+
+        // Step 2: Uploading reference images...
+        onProgress?.('Uploading reference images...', `Uploading ${images.length} reference image(s) to ComfyUI input folder...`);
+        const selectedWorkflowStrategy = WorkflowSelector.selectWorkflow(plan);
+
+        // Step 3: Preparing image workflow...
+        onProgress?.('Preparing image workflow...', `Selected strategy: ${selectedWorkflowStrategy} (optimized for 4GB low-VRAM)...`);
+        await sleep(350);
+
+        // Step 4: Generating...
+        onProgress?.('Generating...', 'Submitting prompt to ComfyUI and monitoring execution...');
+
+        const executeRes = await fetch('/api/comfy/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            images: images.map(img => ({
+              name: img.name,
+              dataUrl: img.dataUrl,
+              mimeType: img.mimeType
+            })),
+            plan,
+            instruction
+          })
+        });
+
+        if (!executeRes.ok) {
+          const errData = await executeRes.json().catch(() => ({}));
+          throw new Error(errData.error || `ComfyUI execution failed with status ${executeRes.status}`);
+        }
+
+        // Step 5: Applying final edits...
+        onProgress?.('Applying final edits...', 'Refining 16:9 canvas composition and perspective harmonization...');
+        await sleep(400);
+
+        // Step 6: Retrieving result...
+        onProgress?.('Retrieving result...', 'Fetching generated output image buffer...');
+        const resultData = await executeRes.json();
+
+        // Step 7: Finishing...
+        onProgress?.('Finishing...', 'Rendering output...');
+        await sleep(300);
+
+        // Developer Debug Information (Section 18)
+        if (resultData.workflow) {
+          window.__LAST_COMFY_WORKFLOW__ = resultData.workflow;
+          console.log('🎨 COMFYUI WORKFLOW:', resultData.workflow);
+        }
+        if (resultData.promptId) {
+          window.__LAST_COMFY_PROMPT_ID__ = resultData.promptId;
+          console.log('🆔 COMFYUI PROMPT ID:', resultData.promptId);
+        }
+
+        return resultData.imageDataUrl;
+      }
+    }
+
+    class CloudProvider extends ImageProvider {
+      constructor(config = {}) {
+        super('Remote Cloud GPU', 'cloud');
+        this.endpoint = config.endpoint || null;
+        this.apiKey = config.apiKey || null;
+        this.timeout = config.timeout || 90000;
+      }
+
+      isConfigured() {
+        return Boolean(this.endpoint && this.apiKey);
+      }
+
+      async edit(images, plan, instruction) {
+        if (!this.isConfigured()) {
+          const workflow = plan.suggestedWorkflow || 'multi_reference_pose_transfer';
+          throw new Error(`Remote Cloud GPU is not configured yet for ${workflow}. Please configure remote endpoint or start local ComfyUI.`);
+        }
+      }
+    }
+
+    // Initialize state providers
+    state.geminiBrain = new GeminiProvider();
+    state.imageProvider = new LocalProvider();
+
+    /* ==========================================================================
+       SECTION 7: JOB HANDLING & 5-STEP USER EXPERIENCE (Section 7, 8, 9)
+       ==========================================================================
+       Step 1: "Analyzing references..."
+       Step 2: "Understanding your instruction..."
+       Step 3: "Planning image edit..."
+       Step 4: "Generating..."
+       Step 5: "Finishing..."
+
+       Developer Plan Debug Mode:
+       console.log('Agent EditPlan:', editPlan);
+       window.__LAST_AGENT_PLAN__ = editPlan;
+       ========================================================================== */
+    UI.btnGenerate.addEventListener('click', handleGenerate);
+
+    // Support Cmd/Ctrl + Enter in textarea
+    UI.instructionInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        handleGenerate();
+      }
+    });
+
+    async function handleGenerate() {
+      const instruction = UI.instructionInput.value.trim();
+      state.instruction = instruction;
+
+      clearBanner();
+      UI.resultSection.style.display = 'none';
+
+      if (!instruction) {
+        showBanner('Please write an instruction for the agent.', 'error');
+        UI.instructionInput.focus();
+        return;
+      }
+
+      // Enter generation sequence
+      setGeneratingState(true);
+
+      try {
+        // Step 1: Analyzing references...
+        updateStatus('Analyzing references...', `Inspecting ${state.references.length} reference image(s)...`);
+        await sleep(500);
+
+        // Step 2: Understanding your instruction...
+        updateStatus('Understanding your instruction...', 'Extracting intent, referenced entities, and conditions...');
+        await sleep(500);
+
+        // Step 3: Planning image edit... (Real Gemini Brain Call)
+        updateStatus('Planning image edit...', 'Formulating structured operation plan and preservation constraints...');
+        const editPlan = await state.geminiBrain.planEdit(state.references, instruction);
+        state.currentPlan = editPlan;
+
+        // Section 8: Developer Plan Debug Mode
+        console.log('====================================');
+        console.log('🤖 AGENT EDIT PLAN (Developer Debug Mode):');
+        console.log(JSON.stringify(editPlan, null, 2));
+        console.log('====================================');
+        window.__LAST_AGENT_PLAN__ = editPlan;
+
+        await sleep(550);
+
+        // Step 4: Generating via real ImageProvider (ComfyUI LocalProvider / CloudProvider)
+        const outputImageUrl = await state.imageProvider.edit(
+          state.references,
+          editPlan,
+          instruction,
+          (stageMsg, detailMsg) => updateStatus(stageMsg, detailMsg)
+        );
+
+        if (outputImageUrl) {
+          displayResult(outputImageUrl);
+        }
+
+        setGeneratingState(false);
+      } catch (err) {
+        setGeneratingState(false);
+        const msg = err.message || 'Image generation failed.';
+        showBanner(msg, 'info');
+        console.info('💡 Agent Execution Notice:', err.message);
+      }
+    }
+
+    function setGeneratingState(isGenerating) {
+      if (isGenerating) {
+        state.stage = 'analyzing';
+        UI.btnGenerate.disabled = true;
+        UI.btnGenerate.innerHTML = '<span>Processing...</span>';
+        UI.statusArea.style.display = 'block';
+      } else {
+        state.stage = 'idle';
+        UI.btnGenerate.disabled = false;
+        UI.btnGenerate.innerHTML = `
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/>
+            <path d="M5 3v4"/>
+            <path d="M19 17v4"/>
+            <path d="M3 5h4"/>
+            <path d="M17 19h4"/>
+          </svg>
+          <span>Generate</span>
+        `;
+        UI.statusArea.style.display = 'none';
+      }
+    }
+
+    function updateStatus(message, detail) {
+      UI.statusMessage.textContent = message;
+      UI.statusDetail.textContent = detail || '';
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    /* ==========================================================================
+       SECTION 8: RESULT DISPLAY & DOWNLOAD
+       ========================================================================== */
+    function displayResult(dataUrl) {
+      state.resultDataUrl = dataUrl;
+      UI.resultImage.src = dataUrl;
+      UI.btnDownload.href = dataUrl;
+      UI.resultSection.style.display = 'flex';
+      UI.resultSection.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    UI.btnUseAsReference.addEventListener('click', () => {
+      if (!state.resultDataUrl) return;
+      state.references = [{
+        id: 'ref_' + Math.random().toString(36).substr(2, 9),
+        name: 'Agent_Output.png',
+        dataUrl: state.resultDataUrl,
+        mimeType: 'image/png',
+        width: UI.resultImage.naturalWidth || 512,
+        height: UI.resultImage.naturalHeight || 512,
+        size: state.resultDataUrl.length * 0.75
+      }];
+      renderReferences();
+      UI.resultSection.style.display = 'none';
+      UI.instructionInput.value = '';
+    });
+
+    /* ==========================================================================
+       SECTION 9: ERROR & MESSAGE HANDLING
+       ========================================================================== */
+    function showBanner(message, type = 'error') {
+      UI.messageBanner.textContent = message;
+      UI.messageBanner.className = `message-banner ${type}`;
+    }
+
+    function clearBanner() {
+      UI.messageBanner.textContent = '';
+      UI.messageBanner.className = 'message-banner';
+    }
+
+    /* ==========================================================================
+       SECTION 10: TEST CASES & SAMPLE PRESETS (Section 13)
+       ==========================================================================
+       Supports the 5 required test cases:
+       TEST 1: "Put a black hat on his head."
+       TEST 2: "Use the jacket from image 2 on the person in image 1, but keep the face unchanged."
+       TEST 3: "Extend the image downward until the character is visible to the knees."
+       TEST 4: "Make the person look down while keeping the same identity."
+       TEST 5: "Remove the object in the background."
+       ========================================================================== */
+    document.querySelectorAll('.sample-chip').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const testCaseNum = e.target.getAttribute('data-test');
+        loadTestCase(testCaseNum);
+      });
+    });
+
+    function loadTestCase(testNum) {
+      clearBanner();
+
+      // Create base subject canvas: Person illustration
+      const canvasPerson = document.createElement('canvas');
+      canvasPerson.width = 448;
+      canvasPerson.height = 448;
+      const ctxP = canvasPerson.getContext('2d');
+
+      // Background
+      const bgGrad = ctxP.createLinearGradient(0, 0, 0, 448);
+      bgGrad.addColorStop(0, '#0369a1');
+      bgGrad.addColorStop(1, '#0f172a');
+      ctxP.fillStyle = bgGrad;
+      ctxP.fillRect(0, 0, 448, 448);
+
+      // Person Face
+      ctxP.fillStyle = '#fde047';
+      ctxP.beginPath();
+      ctxP.arc(224, 190, 75, 0, Math.PI * 2);
+      ctxP.fill();
+
+      // Body / Shoulders
+      ctxP.fillStyle = '#334155';
+      ctxP.beginPath();
+      ctxP.arc(224, 380, 130, 0, Math.PI, true);
+      ctxP.fill();
+
+      // Eyes
+      ctxP.fillStyle = '#0f172a';
+      ctxP.beginPath();
+      ctxP.arc(195, 180, 7, 0, Math.PI * 2);
+      ctxP.arc(253, 180, 7, 0, Math.PI * 2);
+      ctxP.fill();
+
+      // Background lamp post (for Test 5 removal)
+      if (testNum === '5') {
+        ctxP.fillStyle = '#f59e0b';
+        ctxP.beginPath();
+        ctxP.arc(60, 100, 20, 0, Math.PI * 2);
+        ctxP.fill();
+        ctxP.fillStyle = '#475569';
+        ctxP.fillRect(56, 120, 8, 200);
+      }
+
+      const imgPersonUrl = canvasPerson.toDataURL('image/png');
+
+      if (testNum === 'two-char') {
+        // TWO-CHARACTER REFERENCE WORKFLOW (Section 1 & 14)
+        // Image 1: Reference character in landscape setting (pose, location, composition source)
+        // Image 2: Second character with distinct identity/hair/attire (identity source)
+        const canvasChar2 = document.createElement('canvas');
+        canvasChar2.width = 448;
+        canvasChar2.height = 448;
+        const ctx2 = canvasChar2.getContext('2d');
+
+        // Studio warm backdrop
+        const grad2 = ctx2.createLinearGradient(0, 0, 0, 448);
+        grad2.addColorStop(0, '#7c2d12');
+        grad2.addColorStop(1, '#1c1917');
+        ctx2.fillStyle = grad2;
+        ctx2.fillRect(0, 0, 448, 448);
+
+        // Distinct Character 2: Auburn curly hair, green tunic
+        ctx2.fillStyle = '#b45309';
+        ctx2.beginPath();
+        ctx2.arc(224, 180, 95, 0, Math.PI * 2);
+        ctx2.fill();
+
+        // Face
+        ctx2.fillStyle = '#fcd34d';
+        ctx2.beginPath();
+        ctx2.arc(224, 195, 70, 0, Math.PI * 2);
+        ctx2.fill();
+
+        // Green tunic
+        ctx2.fillStyle = '#065f46';
+        ctx2.beginPath();
+        ctx2.arc(224, 380, 130, 0, Math.PI, true);
+        ctx2.fill();
+
+        // Eyes
+        ctx2.fillStyle = '#1e293b';
+        ctx2.beginPath();
+        ctx2.arc(195, 185, 6, 0, Math.PI * 2);
+        ctx2.arc(253, 185, 6, 0, Math.PI * 2);
+        ctx2.fill();
+
+        const imgChar2Url = canvasChar2.toDataURL('image/png');
+
+        state.references = [
+          { id: 't0_1', name: 'Primary_Character_And_Location.png', dataUrl: imgPersonUrl, mimeType: 'image/png', width: 448, height: 448, size: 28000 },
+          { id: 't0_2', name: 'Second_Character_Identity.png', dataUrl: imgChar2Url, mimeType: 'image/png', width: 448, height: 448, size: 29000 }
+        ];
+
+        UI.instructionInput.value = "Use the character from image 2 in the same pose and location/composition as image 1. Keep both characters recognizable. Put a tiara on both characters with the word Tiara written on it. Make both characters lower their heads so that only the area from approximately the nose downward is visibly exposed. Keep the reference environment unchanged. Generate a wide 16:9 image.";
+      } else if (testNum === '1') {
+        // TEST 1: "Put a black hat on his head."
+        // Reference 1: Person, Reference 2: Black hat
+        const canvasHat = document.createElement('canvas');
+        canvasHat.width = 400;
+        canvasHat.height = 400;
+        const ctxH = canvasHat.getContext('2d');
+        ctxH.fillStyle = '#09090b';
+        ctxH.fillRect(0, 0, 400, 400);
+
+        ctxH.fillStyle = '#1e1b4b';
+        ctxH.beginPath();
+        ctxH.ellipse(200, 240, 150, 36, 0, 0, Math.PI * 2);
+        ctxH.fill();
+        ctxH.fillRect(130, 130, 140, 110);
+        ctxH.fillStyle = '#e11d48';
+        ctxH.fillRect(130, 220, 140, 20);
+
+        const imgHatUrl = canvasHat.toDataURL('image/png');
+
+        state.references = [
+          { id: 't1_1', name: 'Person.png', dataUrl: imgPersonUrl, mimeType: 'image/png', width: 448, height: 448, size: 28000 },
+          { id: 't1_2', name: 'Black_Hat.png', dataUrl: imgHatUrl, mimeType: 'image/png', width: 400, height: 400, size: 20000 }
+        ];
+        UI.instructionInput.value = "Put a black hat on his head.";
+      } else if (testNum === '2') {
+        // TEST 2: "Use the jacket from image 2 on the person in image 1, but keep the face unchanged."
+        const canvasJacket = document.createElement('canvas');
+        canvasJacket.width = 400;
+        canvasJacket.height = 400;
+        const ctxJ = canvasJacket.getContext('2d');
+        ctxJ.fillStyle = '#09090b';
+        ctxJ.fillRect(0, 0, 400, 400);
+        ctxJ.fillStyle = '#b45309';
+        ctxJ.fillRect(100, 110, 200, 240);
+
+        const imgJacketUrl = canvasJacket.toDataURL('image/png');
+
+        state.references = [
+          { id: 't2_1', name: 'Person.png', dataUrl: imgPersonUrl, mimeType: 'image/png', width: 448, height: 448, size: 28000 },
+          { id: 't2_2', name: 'Leather_Jacket.png', dataUrl: imgJacketUrl, mimeType: 'image/png', width: 400, height: 400, size: 22000 }
+        ];
+        UI.instructionInput.value = "Use the jacket from image 2 on the person in image 1, but keep the face unchanged.";
+      } else if (testNum === '3') {
+        // TEST 3: "Extend the image downward until the character is visible to the knees."
+        state.references = [
+          { id: 't3_1', name: 'Character.png', dataUrl: imgPersonUrl, mimeType: 'image/png', width: 448, height: 448, size: 28000 }
+        ];
+        UI.instructionInput.value = "Extend the image downward until the character is visible to the knees.";
+      } else if (testNum === '4') {
+        // TEST 4: "Make the person look down while keeping the same identity."
+        state.references = [
+          { id: 't4_1', name: 'Person.png', dataUrl: imgPersonUrl, mimeType: 'image/png', width: 448, height: 448, size: 28000 }
+        ];
+        UI.instructionInput.value = "Make the person look down while keeping the same identity.";
+      } else if (testNum === '5') {
+        // TEST 5: "Remove the object in the background."
+        state.references = [
+          { id: 't5_1', name: 'Person_With_Background_Lamp.png', dataUrl: imgPersonUrl, mimeType: 'image/png', width: 448, height: 448, size: 28000 }
+        ];
+        UI.instructionInput.value = "Remove the object in the background.";
+      }
+
+      renderReferences();
+    }
+  </script>
+</body>
+</html>
