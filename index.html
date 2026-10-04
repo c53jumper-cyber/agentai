@@ -950,7 +950,71 @@
 
     // Comfy Workflow Builder (Section 12)
     const ComfyWorkflowBuilder = {
-      buildMultiStageWorkflow(plan, imageFilenames, instruction, checkpointName = 'v1-5-pruned-emaonly-fp16_2.safetensors') {
+      selectCompatibleCheckpoint(validChoices) {
+        if (!validChoices || validChoices.length === 0) {
+          throw new Error('No checkpoints found in ComfyUI CheckpointLoaderSimple.');
+        }
+
+        // 1. Exact priority: v1-5-pruned-emaonly-fp16_2.safetensors
+        const exact = validChoices.find(
+          c => c.toLowerCase() === 'v1-5-pruned-emaonly-fp16_2.safetensors' ||
+               c.toLowerCase().endsWith('v1-5-pruned-emaonly-fp16_2.safetensors') ||
+               (c.toLowerCase().includes('v1-5') && c.toLowerCase().includes('fp16_2'))
+        );
+        if (exact) return exact;
+
+        // 2. Any other SD1.5 model (fp16, inpainting, or base v1-5)
+        const sd15 = validChoices.find(
+          c => (c.toLowerCase().includes('1-5') || c.toLowerCase().includes('1.5') || c.toLowerCase().includes('sd15')) &&
+               !c.toLowerCase().includes('xl') &&
+               !c.toLowerCase().includes('flux')
+        );
+        if (sd15) return sd15;
+
+        // 3. Any non-XL checkpoint
+        const nonXl = validChoices.find(
+          c => !c.toLowerCase().includes('xl') && !c.toLowerCase().includes('flux') && !c.toLowerCase().includes('cascade')
+        );
+        if (nonXl) return nonXl;
+
+        throw new Error(`No compatible SD 1.5 checkpoint found in ComfyUI CheckpointLoaderSimple. Available: [${validChoices.join(', ')}]. Expected: 'v1-5-pruned-emaonly-fp16_2.safetensors'.`);
+      },
+
+      async queryCheckpointLoaderSimple() {
+        const endpoints = [
+          '/api/comfy/object_info/CheckpointLoaderSimple',
+          '/api/comfy/status'
+        ];
+
+        for (const ep of endpoints) {
+          try {
+            const res = await fetch(ep, { signal: AbortSignal.timeout(4000) });
+            if (!res.ok) continue;
+            const data = await res.json();
+            const nodeInfo = data.CheckpointLoaderSimple || data;
+            const rawList =
+              nodeInfo?.input?.required?.ckpt_name?.[0] ||
+              nodeInfo?.input?.required?.ckpt_name ||
+              data.capabilities?.checkpoints ||
+              data.availableCheckpoints ||
+              [];
+            if (Array.isArray(rawList) && rawList.length > 0) {
+              return rawList.filter(x => typeof x === 'string');
+            }
+          } catch {
+            // Try next
+          }
+        }
+        return ['v1-5-pruned-emaonly-fp16_2.safetensors'];
+      },
+
+      async buildMultiStageWorkflow(plan, imageFilenames, instruction, preferredCheckpoint) {
+        let checkpointName = preferredCheckpoint;
+        if (!checkpointName) {
+          const choices = await this.queryCheckpointLoaderSimple();
+          checkpointName = this.selectCompatibleCheckpoint(choices);
+        }
+
         const isTwoChar = plan?.subjects && plan.subjects.length >= 2;
         const wearsTiara = plan?.subjects?.some(s => s.wearTiara);
         const headDown = plan?.subjects?.some(s => s.headPose?.direction === 'down');
